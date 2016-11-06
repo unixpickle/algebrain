@@ -5,6 +5,7 @@ type Precedence int
 const (
 	AddPrecedence Precedence = iota
 	MultPrecedence
+	NegPrecedence
 	ExpPrecedence
 	AtomicPrecedence
 )

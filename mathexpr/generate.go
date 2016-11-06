@@ -1,6 +1,7 @@
 package mathexpr
 
 import (
+	"math"
 	"math/rand"
 	"strconv"
 )
@@ -44,11 +45,17 @@ type Generator struct {
 func (g *Generator) Generate(maxDepth int) Node {
 	if maxDepth == 0 || rand.Intn(maxDepth+1) == 0 {
 		return g.randomRawNode()
-	}
-	if len(g.FuncNames) == 0 || rand.Intn(2) == 0 {
+	} else if len(g.FuncNames) != 0 && rand.Intn(3) == 0 {
+		return g.randomFuncOp(maxDepth)
+	} else if rand.Intn(2) == 0 {
 		return g.randomBinaryOp(maxDepth)
+	} else {
+		return g.randomNegOp(maxDepth)
 	}
-	return g.randomFuncOp(maxDepth)
+}
+
+func (g *Generator) randomNegOp(maxDepth int) *NegOp {
+	return &NegOp{Node: g.Generate(maxDepth - 1)}
 }
 
 func (g *Generator) randomFuncOp(maxDepth int) *FuncOp {
@@ -88,15 +95,9 @@ func (g *Generator) randomNumNode() RawNode {
 	if s == 0 {
 		s = DefaultGeneratorStddev
 	}
-	num := rand.NormFloat64() * s
+	num := math.Abs(rand.NormFloat64() * s)
 	if g.NoReals {
-		var intVal int
-		if num < 0 {
-			intVal = -int(-num + 0.5)
-		} else {
-			intVal = int(num + 0.5)
-		}
-		return RawNode(strconv.Itoa(intVal))
+		return RawNode(strconv.Itoa(int(num + 0.5)))
 	} else {
 		return RawNode(strconv.FormatFloat(num, 'f', -1, 64))
 	}
