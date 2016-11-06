@@ -80,7 +80,10 @@ func main() {
 
 	var lastBatch sgd.SampleSet
 	var iter int
+	block.Dropout(true)
 	sgd.SGDMini(gradienter, training, stepSize, batchSize, func(b sgd.SampleSet) bool {
+		block.Dropout(false)
+		defer block.Dropout(true)
 		var lastCost float64
 		if lastBatch != nil {
 			lastCost = seqtoseq.TotalCostBlock(block, batchSize, lastBatch, costFunc)
@@ -96,6 +99,7 @@ func main() {
 		return true
 	})
 
+	block.Dropout(false)
 	if err := block.Save(outFile); err != nil {
 		die("Failed to save block:", err)
 	}

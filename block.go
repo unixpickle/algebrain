@@ -4,9 +4,11 @@ import (
 	"io/ioutil"
 
 	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/neuralstruct"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
 	"github.com/unixpickle/sgd"
+	"github.com/unixpickle/weakai/neuralnet"
 	"github.com/unixpickle/weakai/rnn"
 )
 
@@ -208,6 +210,30 @@ func (b *Block) SerializerType() string {
 // Serialize attempts to serialize the block.
 func (b *Block) Serialize() ([]byte, error) {
 	return serializer.SerializeAny(b.Reader, b.Writer)
+}
+
+// Dropout searches from dropout layers and toggles
+// dropout on them.
+func (b *Block) Dropout(enabled bool) {
+	for _, block := range []rnn.Block{b.Reader, b.Writer} {
+		structBlock, ok := block.(*neuralstruct.Block)
+		if !ok {
+			continue
+		}
+		sb, ok := structBlock.Block.(rnn.StackedBlock)
+		if !ok {
+			continue
+		}
+		for _, x := range sb {
+			if n, ok := x.(*rnn.NetworkBlock); ok {
+				for _, l := range n.Network() {
+					if do, ok := l.(*neuralnet.DropoutLayer); ok {
+						do.Training = enabled
+					}
+				}
+			}
+		}
+	}
 }
 
 // Save writes the block to a file.
