@@ -13,6 +13,8 @@ import (
 const (
 	CharCount  = 128
 	Terminator = 0
+
+	maxResponseLen = 1000
 )
 
 func init() {
@@ -215,6 +217,32 @@ func (b *Block) Save(path string) error {
 		return err
 	}
 	return ioutil.WriteFile(path, enc, 0755)
+}
+
+// Query runs a query against this block and returns the
+// resulting string.
+func (b *Block) Query(q string) string {
+	r := &rnn.Runner{Block: b}
+	for _, x := range q {
+		if x < 0 || x > 128 {
+			continue
+		}
+		r.StepTime(oneHotVector(x))
+	}
+	r.StepTime(oneHotVector(Terminator))
+
+	var lastOut rune = Terminator
+	var res string
+	for {
+		nextVec := r.StepTime(oneHotVector(lastOut))
+		_, nextIdx := nextVec.Max()
+		lastOut = rune(nextIdx)
+		if lastOut == 0 || len(res) >= maxResponseLen {
+			break
+		}
+		res += string(lastOut)
+	}
+	return res
 }
 
 type blockResult struct {
