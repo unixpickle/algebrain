@@ -1,6 +1,8 @@
 package algebrain
 
 import (
+	"io/ioutil"
+
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
@@ -41,6 +43,15 @@ func DeserializeBlock(d []byte) (*Block, error) {
 		return nil, err
 	}
 	return &res, nil
+}
+
+// LoadBlock loads a block from a file.
+func LoadBlock(path string) (*Block, error) {
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return DeserializeBlock(contents)
 }
 
 // StartState returns a state which wraps the reader's
@@ -195,6 +206,15 @@ func (b *Block) SerializerType() string {
 // Serialize attempts to serialize the block.
 func (b *Block) Serialize() ([]byte, error) {
 	return serializer.SerializeAny(b.Reader, b.Writer)
+}
+
+// Save writes the block to a file.
+func (b *Block) Save(path string) error {
+	enc, err := b.Serialize()
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, enc, 0755)
 }
 
 type blockResult struct {
