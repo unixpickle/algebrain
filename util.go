@@ -6,6 +6,10 @@ import "reflect"
 // corresponding to a read operation and those
 // corresponding to a write operation.
 func splitReadWrite(isReading []bool, slice, outRead, outWrite interface{}) {
+	if slice == nil || reflect.ValueOf(slice).IsNil() {
+		return
+	}
+
 	sv := reflect.ValueOf(slice)
 
 	var readCount, writeCount int
@@ -52,4 +56,6 @@ func joinReadWrite(isReading []bool, readSlice, writeSlice, outSlice interface{}
 			writeIdx++
 		}
 	}
+
+	reflect.ValueOf(outSlice).Elem().Set(out)
 }

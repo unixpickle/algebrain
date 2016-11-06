@@ -4,12 +4,13 @@ import (
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/sgd"
 	"github.com/unixpickle/weakai/rnn"
 )
 
 const (
-	CharCount = 128
-	Terminate = 0
+	CharCount  = 128
+	Terminator = 0
 )
 
 func init() {
@@ -80,7 +81,7 @@ func (b *Block) PropagateStartR(s []rnn.RState, u []rnn.RStateGrad, rg autofunc.
 
 // ApplyBlock applies the block to an input.
 //
-// An input with the Terminate component set to non-zero
+// An input with the Terminator component set to non-zero
 // signals that the remaining timesteps for that sequence
 // should be fed into the writer.
 func (b *Block) ApplyBlock(s []rnn.State, in []autofunc.Result) rnn.BlockResult {
@@ -92,7 +93,7 @@ func (b *Block) ApplyBlock(s []rnn.State, in []autofunc.Result) rnn.BlockResult 
 	}
 
 	var readS, writeS []rnn.State
-	splitReadWrite(reading, s, &readS, &writeS)
+	splitReadWrite(reading, internalS, &readS, &writeS)
 	var readIn, writeIn []autofunc.Result
 	splitReadWrite(reading, in, &readIn, &writeIn)
 
@@ -117,7 +118,7 @@ func (b *Block) ApplyBlock(s []rnn.State, in []autofunc.Result) rnn.BlockResult 
 	var internalStates []rnn.State
 	joinReadWrite(reading, readRes.States(), writeRes.States(), &internalStates)
 	for i, x := range s {
-		reading := x.(*blockState).Reading && in[i].Output()[Terminate] == 0
+		reading := x.(*blockState).Reading && in[i].Output()[Terminator] == 0
 		res.OutStates = append(res.OutStates, &blockState{
 			Reading: reading,
 			State:   internalStates[i],
@@ -138,7 +139,7 @@ func (b *Block) ApplyBlockR(rv autofunc.RVector, s []rnn.RState,
 	}
 
 	var readS, writeS []rnn.RState
-	splitReadWrite(reading, s, &readS, &writeS)
+	splitReadWrite(reading, internalS, &readS, &writeS)
 	var readIn, writeIn []autofunc.RResult
 	splitReadWrite(reading, in, &readIn, &writeIn)
 
@@ -164,13 +165,24 @@ func (b *Block) ApplyBlockR(rv autofunc.RVector, s []rnn.RState,
 	var internalStates []rnn.RState
 	joinReadWrite(reading, readRes.RStates(), writeRes.RStates(), &internalStates)
 	for i, x := range s {
-		reading := x.(*blockState).Reading && in[i].Output()[Terminate] == 0
+		reading := x.(*blockRState).Reading && in[i].Output()[Terminator] == 0
 		res.OutStates = append(res.OutStates, &blockRState{
 			Reading: reading,
 			State:   internalStates[i],
 		})
 	}
 
+	return res
+}
+
+// Parameters gets the parameters of the block.
+func (b *Block) Parameters() []*autofunc.Variable {
+	var res []*autofunc.Variable
+	for _, block := range []rnn.Block{b.Reader, b.Writer} {
+		if l, ok := block.(sgd.Learner); ok {
+			res = append(res, l.Parameters()...)
+		}
+	}
 	return res
 }
 
