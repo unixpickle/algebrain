@@ -55,11 +55,12 @@ func main() {
 	log.Println("Creating samples...")
 	training, validation := generateSamples(genNames, samplesPerGen)
 
+	rand.Seed(time.Now().UnixNano())
+
 	log.Println("Obtaining RNN block...")
 	block, err := algebrain.LoadBlock(outFile)
 	if os.IsNotExist(err) {
 		log.Println("Creating new RNN block...")
-		rand.Seed(time.Now().UnixNano())
 		block = algebrain.NewBlock(NewBlockDropout, NewBlockStruct, NewBlockHidden...)
 	} else if err != nil {
 		die("Failed to load block:", err)
