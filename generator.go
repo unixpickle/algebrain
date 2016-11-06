@@ -20,7 +20,7 @@ type Generator interface {
 }
 
 // A ShiftGenerator generates Samples with queries like
-// "shift x in x^2+2 by 2", producing results like
+// "shift x by 2 in x^2+2", producing results like
 // "(x-2)^2+2".
 type ShiftGenerator struct {
 	Generator *mathexpr.Generator
