@@ -29,15 +29,18 @@ func (s SampleSet) GetSample(i int) interface{} {
 		res.Inputs = append(res.Inputs, oneHotVector(x))
 		res.Outputs = append(res.Outputs, zeroVector())
 	}
-	res.Inputs = append(res.Inputs, oneHotVector(0))
+	res.Inputs = append(res.Inputs, oneHotVector(Terminator))
 	res.Outputs = append(res.Outputs, zeroVector())
 
-	var last rune
+	var last rune = Terminator
 	for _, x := range sample.Response {
 		res.Inputs = append(res.Inputs, oneHotVector(last))
 		res.Outputs = append(res.Outputs, oneHotVector(x))
 		last = x
 	}
+
+	res.Inputs = append(res.Inputs, oneHotVector(last))
+	res.Outputs = append(res.Outputs, oneHotVector(Terminator))
 
 	return res
 }
