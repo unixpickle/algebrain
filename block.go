@@ -49,6 +49,51 @@ func DeserializeBlock(d []byte) (*Block, error) {
 	return &res, nil
 }
 
+// NewBlock creates a block that uses a multi-layer LSTM
+// and an assortment of differentiable memory structures.
+func NewBlock(dropout float64, structure neuralstruct.RAggregate, hiddenSizes ...int) *Block {
+	resBlocks := make([]rnn.Block, 2)
+	for i := range resBlocks {
+		var sb rnn.StackedBlock
+		inCount := structure.DataSize() + CharCount
+		for _, hidden := range hiddenSizes {
+			sb = append(sb, rnn.NewLSTM(inCount, hidden))
+			sb = append(sb, rnn.NewNetworkBlock(neuralnet.Network{
+				&neuralnet.DropoutLayer{
+					KeepProbability: dropout,
+				},
+			}, 0))
+			inCount = hidden
+		}
+
+		outCount := CharCount + structure.ControlSize()
+		outNet := neuralnet.Network{
+			&neuralnet.DenseLayer{
+				InputCount:  inCount,
+				OutputCount: outCount,
+			},
+			&neuralstruct.PartialActivation{
+				Activations: []neuralnet.Layer{
+					structure.SuggestedActivation(),
+					&neuralnet.LogSoftmaxLayer{},
+				},
+				Ranges: []neuralstruct.ComponentRange{
+					{Start: 0, End: structure.ControlSize()},
+					{Start: structure.ControlSize(), End: outCount},
+				},
+			},
+		}
+		outNet.Randomize()
+		sb = append(sb, rnn.NewNetworkBlock(outNet, 0))
+
+		resBlocks[i] = &neuralstruct.Block{
+			Struct: structure,
+			Block:  sb,
+		}
+	}
+	return &Block{Reader: resBlocks[0], Writer: resBlocks[1]}
+}
+
 // LoadBlock loads a block from a file.
 func LoadBlock(path string) (*Block, error) {
 	contents, err := ioutil.ReadFile(path)
