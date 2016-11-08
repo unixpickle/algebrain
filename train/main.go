@@ -43,7 +43,7 @@ var (
 		&neuralstruct.Queue{VectorSize: 30},
 	}
 	NewBlockHidden  = []int{512, 512}
-	NewBlockDropout = 0.7
+	NewBlockDropout = 0.9
 )
 
 func main() {
