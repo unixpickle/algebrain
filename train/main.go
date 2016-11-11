@@ -26,7 +26,21 @@ var Generators = map[string]algebrain.Generator{
 		},
 		MaxDepth: 1,
 	},
+	"EasyScale": &algebrain.ScaleGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals:  true,
+			VarNames: []string{"x"},
+		},
+		MaxDepth: 1,
+	},
 	"MediumShift": &algebrain.ShiftGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals:  true,
+			VarNames: []string{"x"},
+		},
+		MaxDepth: 3,
+	},
+	"MediumScale": &algebrain.ScaleGenerator{
 		Generator: &mathexpr.Generator{
 			NoReals:  true,
 			VarNames: []string{"x"},
@@ -52,7 +66,7 @@ func main() {
 	var batchSize int
 	var outFile string
 	var samplesPerGen int
-	flag.StringVar(&genNames, "generators", "EasyShift,MediumShift",
+	flag.StringVar(&genNames, "generators", "EasyShift,MediumShift,EasyScale,MediumScale",
 		"comma-separated generator list")
 	flag.Float64Var(&stepSize, "step", 0.005, "SGD step size")
 	flag.IntVar(&batchSize, "batch", 4, "SGD batch size")
