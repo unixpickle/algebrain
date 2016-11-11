@@ -37,10 +37,10 @@ var Generators = map[string]algebrain.Generator{
 
 var (
 	NewBlockStruct = neuralstruct.RAggregate{
-		&neuralstruct.Stack{VectorSize: 30, NoReplace: true},
-		&neuralstruct.Stack{VectorSize: 30, NoReplace: true},
-		&neuralstruct.Queue{VectorSize: 30},
-		&neuralstruct.Queue{VectorSize: 30},
+		&neuralstruct.Stack{VectorSize: 30, NoReplace: true, PushBias: 2},
+		&neuralstruct.Stack{VectorSize: 30, NoReplace: true, PushBias: 2},
+		&neuralstruct.Queue{VectorSize: 30, PushBias: 2},
+		&neuralstruct.Queue{VectorSize: 30, PushBias: 2},
 	}
 	NewBlockHidden  = []int{512, 512}
 	NewBlockDropout = 0.9
