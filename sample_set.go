@@ -1,7 +1,6 @@
 package algebrain
 
 import (
-	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/sgd"
 	"github.com/unixpickle/weakai/rnn/seqtoseq"
 )
@@ -53,18 +52,4 @@ func (s SampleSet) Copy() sgd.SampleSet {
 // Subset returns a subset of the sample set.
 func (s SampleSet) Subset(i, j int) sgd.SampleSet {
 	return s[i:j]
-}
-
-func zeroVector() linalg.Vector {
-	return make(linalg.Vector, CharCount)
-}
-
-func oneHotVector(x rune) linalg.Vector {
-	res := make(linalg.Vector, CharCount)
-	ix := int(x)
-	if ix > 128 || ix < 0 {
-		panic("rune out of range: " + string(x))
-	}
-	res[ix] = 1
-	return res
 }

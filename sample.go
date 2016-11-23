@@ -5,6 +5,8 @@ import (
 	"math/rand"
 
 	"github.com/unixpickle/algebrain/mathexpr"
+	"github.com/unixpickle/autofunc/seqfunc"
+	"github.com/unixpickle/num-analysis/linalg"
 )
 
 // A Sample contains a query (e.g. "factorize x^2+x") and
@@ -12,6 +14,25 @@ import (
 type Sample struct {
 	Query    string
 	Response string
+}
+
+// InputSequence generates the sample's input sequence.
+func (s *Sample) InputSequence() seqfunc.Result {
+	res := make([]linalg.Vector, len(s.Query))
+	for i, x := range s.Query {
+		res[i] = oneHotVector(x)
+	}
+	return seqfunc.ConstResult([][]linalg.Vector{res})
+}
+
+// OutputSequence generates the sample's output sequence.
+func (s *Sample) OutputSequence() seqfunc.Result {
+	res := make([]linalg.Vector, len(s.Response)+1)
+	res[0] = zeroVector()
+	for i, x := range s.Response {
+		res[i+1] = oneHotVector(x)
+	}
+	return seqfunc.ConstResult([][]linalg.Vector{res})
 }
 
 // A Generator generates random Samples from a template.
@@ -97,4 +118,18 @@ func generateNumber(g mathexpr.Generator) mathexpr.RawNode {
 	g.VarNames = nil
 	g.ConstNames = nil
 	return g.Generate(0).(mathexpr.RawNode)
+}
+
+func zeroVector() linalg.Vector {
+	return make(linalg.Vector, CharCount)
+}
+
+func oneHotVector(x rune) linalg.Vector {
+	res := make(linalg.Vector, CharCount)
+	ix := int(x)
+	if ix > 128 || ix < 0 {
+		panic("rune out of range: " + string(x))
+	}
+	res[ix] = 1
+	return res
 }
