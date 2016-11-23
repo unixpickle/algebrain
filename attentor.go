@@ -74,8 +74,7 @@ func (a *attentorState) NextState(ctrl linalg.Vector) neuralstruct.State {
 		joinedIn := autofunc.Concat(ctrlPool, in)
 		return a.attentor.Network.Apply(joinedIn)
 	})
-	sm := autofunc.Softmax{}
-	exps := seqfunc.Map(energies, sm.Apply)
+	exps := seqfunc.Map(energies, autofunc.Exp{}.Apply)
 	mag := autofunc.Inverse(seqfunc.AddAll(exps))
 	probs := seqfunc.Map(exps, func(in autofunc.Result) autofunc.Result {
 		return autofunc.Mul(mag, in)

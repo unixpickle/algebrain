@@ -1,9 +1,6 @@
 package algebrain
 
-import (
-	"github.com/unixpickle/sgd"
-	"github.com/unixpickle/weakai/rnn/seqtoseq"
-)
+import "github.com/unixpickle/sgd"
 
 // A SampleSet wraps a slice of Samples in an
 // sgd.SampleSet.
@@ -19,29 +16,9 @@ func (s SampleSet) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-// GetSample produces a seqtoseq.Sample for the sample.
+// GetSample gives the *Sample at the given index.
 func (s SampleSet) GetSample(i int) interface{} {
-	sample := s[i]
-
-	res := seqtoseq.Sample{}
-	for _, x := range sample.Query {
-		res.Inputs = append(res.Inputs, oneHotVector(x))
-		res.Outputs = append(res.Outputs, zeroVector())
-	}
-	res.Inputs = append(res.Inputs, oneHotVector(Terminator))
-	res.Outputs = append(res.Outputs, zeroVector())
-
-	var last rune = Terminator
-	for _, x := range sample.Response {
-		res.Inputs = append(res.Inputs, oneHotVector(last))
-		res.Outputs = append(res.Outputs, oneHotVector(x))
-		last = x
-	}
-
-	res.Inputs = append(res.Inputs, oneHotVector(last))
-	res.Outputs = append(res.Outputs, oneHotVector(Terminator))
-
-	return res
+	return s[i]
 }
 
 // Copy returns a copy of the sample set.

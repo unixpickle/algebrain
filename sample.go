@@ -25,12 +25,26 @@ func (s *Sample) InputSequence() seqfunc.Result {
 	return seqfunc.ConstResult([][]linalg.Vector{res})
 }
 
-// OutputSequence generates the sample's output sequence.
-func (s *Sample) OutputSequence() seqfunc.Result {
-	res := make([]linalg.Vector, len(s.Response)+1)
+// DecoderOutSequence is the desired output from the
+// decoder if all goes well.
+func (s *Sample) DecoderOutSequence() seqfunc.Result {
+	res := make([]linalg.Vector, len(s.Response)+2)
 	res[0] = zeroVector()
 	for i, x := range s.Response {
 		res[i+1] = oneHotVector(x)
+	}
+	res[len(res)-1] = oneHotVector(Terminator)
+	return seqfunc.ConstResult([][]linalg.Vector{res})
+}
+
+// DecoderInSequence generates the desired input to be fed
+// to the decoder if all goes well.
+func (s *Sample) DecoderInSequence() seqfunc.Result {
+	res := make([]linalg.Vector, len(s.Response)+2)
+	res[0] = zeroVector()
+	res[1] = zeroVector()
+	for i, x := range s.Response {
+		res[i+2] = oneHotVector(x)
 	}
 	return seqfunc.ConstResult([][]linalg.Vector{res})
 }

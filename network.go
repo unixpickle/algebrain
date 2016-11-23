@@ -65,8 +65,8 @@ func NewNetwork() *Network {
 		},
 	}
 	decoderBlock := rnn.StackedBlock{
-		rnn.NewLSTM(encoderOutSize, 200),
-		rnn.NewLSTM(200, focusInfoSize+CharCount),
+		rnn.NewLSTM(encoderOutSize+CharCount, 300),
+		newOutputBlock(300, focusInfoSize+CharCount, nil),
 	}
 	attention := neuralnet.Network{
 		&neuralnet.DenseLayer{
@@ -148,6 +148,42 @@ func (n *Network) Query(q string) string {
 		res += string(lastOut)
 	}
 	return res
+}
+
+// Gradient computes the cost gradient for a batch.
+func (n *Network) Gradient(s sgd.SampleSet) autofunc.Gradient {
+	grad := autofunc.NewGradient(n.Parameters())
+	for i := 0; i < s.Len(); i++ {
+		cost := n.computeCost(s.GetSample(i).(*Sample), grad)
+		cost.PropagateGradient([]float64{1}, grad)
+	}
+	return grad
+}
+
+// TotalCost computes the total cost for a batch.
+func (n *Network) TotalCost(s sgd.SampleSet) float64 {
+	var cost float64
+	for i := 0; i < s.Len(); i++ {
+		c := n.computeCost(s.GetSample(i).(*Sample), nil)
+		cost += c.Output()[0]
+	}
+	return cost
+}
+
+func (n *Network) computeCost(s *Sample, g autofunc.Gradient) autofunc.Result {
+	encoded := n.Encoder.ApplySeqs(s.InputSequence())
+	costs := seqfunc.Pool(encoded, func(encoded seqfunc.Result) seqfunc.Result {
+		decoder := n.evaluationBlock(encoded, g)
+		decoderSF := rnn.BlockSeqFunc{B: decoder}
+		output := decoderSF.ApplySeqs(s.DecoderInSequence())
+		return seqfunc.MapN(func(ins ...autofunc.Result) autofunc.Result {
+			actual := ins[0]
+			expected := ins[1].Output()
+			cf := &neuralnet.DotCost{}
+			return cf.Cost(expected, actual)
+		}, output, s.DecoderOutSequence())
+	})
+	return seqfunc.AddAll(costs)
 }
 
 func (n *Network) evaluationBlock(enc seqfunc.Result, g autofunc.Gradient) rnn.Block {

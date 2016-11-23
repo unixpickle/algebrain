@@ -11,11 +11,7 @@ import (
 
 	"github.com/unixpickle/algebrain"
 	"github.com/unixpickle/algebrain/mathexpr"
-	"github.com/unixpickle/neuralstruct"
 	"github.com/unixpickle/sgd"
-	"github.com/unixpickle/weakai/neuralnet"
-	"github.com/unixpickle/weakai/rnn"
-	"github.com/unixpickle/weakai/rnn/seqtoseq"
 )
 
 var Generators = map[string]algebrain.Generator{
@@ -49,17 +45,6 @@ var Generators = map[string]algebrain.Generator{
 	},
 }
 
-var (
-	NewBlockStruct = neuralstruct.RAggregate{
-		&neuralstruct.Stack{VectorSize: 30, NoReplace: true, PushBias: 2},
-		&neuralstruct.Stack{VectorSize: 30, NoReplace: true, PushBias: 2},
-		&neuralstruct.Queue{VectorSize: 30, PushBias: 2},
-		&neuralstruct.Queue{VectorSize: 30, PushBias: 2},
-	}
-	NewBlockHidden  = []int{512, 512}
-	NewBlockDropout = 0.9
-)
-
 func main() {
 	var genNames string
 	var stepSize float64
@@ -80,49 +65,35 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	log.Println("Obtaining RNN block...")
-	block, err := algebrain.LoadBlock(outFile)
+	net, err := algebrain.LoadNetwork(outFile)
 	if os.IsNotExist(err) {
 		log.Println("Creating new RNN block...")
-		block = algebrain.NewBlock(NewBlockDropout, NewBlockStruct, NewBlockHidden...)
+		net = algebrain.NewNetwork()
 	} else if err != nil {
 		die("Failed to load block:", err)
 	}
 
 	log.Println("Training...")
 
-	costFunc := neuralnet.DotCost{}
-	gradienter := &sgd.Adam{
-		Gradienter: &seqtoseq.Gradienter{
-			SeqFunc:  &rnn.BlockSeqFunc{B: block},
-			Learner:  block,
-			CostFunc: costFunc,
-			MaxLanes: batchSize,
-		},
-	}
+	gradienter := &sgd.Adam{Gradienter: net}
 
 	var lastBatch sgd.SampleSet
 	var iter int
-	block.Dropout(true)
 	sgd.SGDMini(gradienter, training, stepSize, batchSize, func(b sgd.SampleSet) bool {
-		block.Dropout(false)
-		defer block.Dropout(true)
 		var lastCost float64
 		if lastBatch != nil {
-			lastCost = seqtoseq.TotalCostBlock(block, batchSize, lastBatch, costFunc)
+			lastCost = net.TotalCost(lastBatch)
 		}
 		lastBatch = b
-		cost := seqtoseq.TotalCostBlock(block, batchSize, b, costFunc)
-
+		cost := net.TotalCost(b)
 		sgd.ShuffleSampleSet(validation)
-		subValidation := validation.Subset(0, batchSize)
-		val := seqtoseq.TotalCostBlock(block, batchSize, subValidation, costFunc)
+		val := net.TotalCost(validation.Subset(0, batchSize))
 		log.Printf("iter %d: validation=%f cost=%f last=%f", iter, val, cost, lastCost)
 		iter++
 		return true
 	})
 
-	block.Dropout(false)
-	if err := block.Save(outFile); err != nil {
+	if err := net.Save(outFile); err != nil {
 		die("Failed to save block:", err)
 	}
 }
