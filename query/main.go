@@ -12,12 +12,12 @@ func main() {
 	if len(os.Args) != 2 {
 		die("Usage:", os.Args[0], "<net_file>")
 	}
-	block, err := algebrain.LoadBlock(os.Args[1])
+	net, err := algebrain.LoadNetwork(os.Args[1])
 	if err != nil {
 		die("Load block:", err)
 	}
 	for {
-		fmt.Println(block.Query(readLine()))
+		fmt.Println(net.Query(readLine()))
 	}
 }
 
