@@ -51,12 +51,14 @@ func main() {
 	var batchSize int
 	var outFile string
 	var samplesPerGen int
+	var logInterval int
 	flag.StringVar(&genNames, "generators", "EasyShift,MediumShift,EasyScale,MediumScale",
 		"comma-separated generator list")
 	flag.Float64Var(&stepSize, "step", 0.005, "SGD step size")
 	flag.IntVar(&batchSize, "batch", 4, "SGD batch size")
 	flag.StringVar(&outFile, "file", "out_net", "output/input network file")
 	flag.IntVar(&samplesPerGen, "samples", 10000, "samples per generator")
+	flag.IntVar(&logInterval, "logint", 4, "log interval")
 	flag.Parse()
 
 	log.Println("Creating samples...")
@@ -80,15 +82,17 @@ func main() {
 	var lastBatch sgd.SampleSet
 	var iter int
 	sgd.SGDMini(gradienter, training, stepSize, batchSize, func(b sgd.SampleSet) bool {
-		var lastCost float64
-		if lastBatch != nil {
-			lastCost = net.TotalCost(lastBatch)
+		if iter%logInterval == 0 {
+			var lastCost float64
+			if lastBatch != nil {
+				lastCost = net.TotalCost(lastBatch)
+			}
+			lastBatch = b
+			cost := net.TotalCost(b)
+			sgd.ShuffleSampleSet(validation)
+			val := net.TotalCost(validation.Subset(0, batchSize))
+			log.Printf("iter %d: validation=%f cost=%f last=%f", iter, val, cost, lastCost)
 		}
-		lastBatch = b
-		cost := net.TotalCost(b)
-		sgd.ShuffleSampleSet(validation)
-		val := net.TotalCost(validation.Subset(0, batchSize))
-		log.Printf("iter %d: validation=%f cost=%f last=%f", iter, val, cost, lastCost)
 		iter++
 		return true
 	})
