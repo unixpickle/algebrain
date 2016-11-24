@@ -8,6 +8,8 @@ import (
 	"github.com/unixpickle/weakai/neuralnet"
 )
 
+const attentorBatchSize = 16
+
 // An attentor implements the attention mechanism as a
 // neuralstruct.RStruct, although the r-operator methods
 // are not implemented.
@@ -68,12 +70,15 @@ func (a *attentorState) Gradient(us linalg.Vector, _ neuralstruct.Grad) (ctrlGra
 }
 
 func (a *attentorState) NextState(ctrl linalg.Vector) neuralstruct.State {
-	// TODO: batch this.
 	ctrlPool := &autofunc.Variable{Vector: ctrl}
-	energies := seqfunc.Map(a.attentor.Encoded, func(in autofunc.Result) autofunc.Result {
-		joinedIn := autofunc.Concat(ctrlPool, in)
-		return a.attentor.Network.Apply(joinedIn)
+	ctrlAugmented := seqfunc.Map(a.attentor.Encoded, func(in autofunc.Result) autofunc.Result {
+		return autofunc.Concat(ctrlPool, in)
 	})
+	mapper := seqfunc.FixedMapBatcher{
+		B:         a.attentor.Network.BatchLearner(),
+		BatchSize: attentorBatchSize,
+	}
+	energies := mapper.ApplySeqs(ctrlAugmented)
 	exps := seqfunc.Map(energies, autofunc.Exp{}.Apply)
 	mag := autofunc.Inverse(seqfunc.AddAll(exps))
 	probs := seqfunc.Map(exps, func(in autofunc.Result) autofunc.Result {
