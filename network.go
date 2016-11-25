@@ -16,7 +16,7 @@ const (
 	CharCount  = 128
 	Terminator = 0
 
-	encoderOutSize = 100
+	encoderOutSize = 20
 	focusInfoSize  = 50
 
 	maxResponseLen = 1000
@@ -48,29 +48,37 @@ func DeserializeNetwork(d []byte) (*Network, error) {
 // NewNetwork creates a randomly-initialized Network.
 func NewNetwork() *Network {
 	encoder := &rnn.Bidirectional{
-		Forward: &rnn.BlockSeqFunc{
-			B: rnn.StackedBlock{
-				rnn.NewLSTM(CharCount, 200),
-				rnn.NewLSTM(200, encoderOutSize),
-			},
-		},
-		Backward: &rnn.BlockSeqFunc{
-			B: rnn.StackedBlock{
-				rnn.NewLSTM(CharCount, 200),
-				rnn.NewLSTM(200, encoderOutSize),
-			},
-		},
+		Forward: &rnn.BlockSeqFunc{B: &rnn.StateOutBlock{
+			Block: newNetworkBlock(CharCount+encoderOutSize, encoderOutSize, encoderOutSize,
+				neuralnet.HyperbolicTangent{}),
+		}},
+		Backward: &rnn.BlockSeqFunc{B: &rnn.StateOutBlock{
+			Block: newNetworkBlock(CharCount+encoderOutSize, encoderOutSize, encoderOutSize,
+				neuralnet.HyperbolicTangent{}),
+		}},
 		Output: &rnn.BlockSeqFunc{
-			B: newOutputBlock(encoderOutSize*2, encoderOutSize, nil),
+			B: newOutputBlock(encoderOutSize*2, encoderOutSize,
+				neuralnet.HyperbolicTangent{}),
 		},
 	}
 	decoderBlock := rnn.StackedBlock{
 		rnn.NewLSTM(encoderOutSize+CharCount, 300),
-		newOutputBlock(300, focusInfoSize+CharCount, nil),
+		rnn.NewLSTM(300, 300),
+		newOutputBlock(300, focusInfoSize+CharCount, &neuralstruct.PartialActivation{
+			Ranges: []neuralstruct.ComponentRange{
+				{Start: 0, End: focusInfoSize},
+			},
+			Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
+		}),
 	}
 	attention := neuralnet.Network{
 		&neuralnet.DenseLayer{
 			InputCount:  focusInfoSize + encoderOutSize,
+			OutputCount: 300,
+		},
+		&neuralnet.HyperbolicTangent{},
+		&neuralnet.DenseLayer{
+			InputCount:  300,
 			OutputCount: 100,
 		},
 		&neuralnet.HyperbolicTangent{},
@@ -202,6 +210,10 @@ func (n *Network) evaluationBlock(enc seqfunc.Result, g autofunc.Gradient) rnn.B
 }
 
 func newOutputBlock(inCount, outCount int, activation neuralnet.Layer) rnn.Block {
+	return newNetworkBlock(inCount, outCount, 0, activation)
+}
+
+func newNetworkBlock(inCount, outCount, state int, activation neuralnet.Layer) rnn.Block {
 	net := neuralnet.Network{
 		&neuralnet.DenseLayer{
 			InputCount:  inCount,
@@ -212,5 +224,7 @@ func newOutputBlock(inCount, outCount int, activation neuralnet.Layer) rnn.Block
 		net = append(net, activation)
 	}
 	net.Randomize()
-	return rnn.NewNetworkBlock(net, 0)
+	biases := net[0].(*neuralnet.DenseLayer).Biases
+	biases.Var.Vector.Scale(0)
+	return rnn.NewNetworkBlock(net, state)
 }

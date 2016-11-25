@@ -8,7 +8,10 @@ import (
 	"github.com/unixpickle/weakai/neuralnet"
 )
 
-const attentorBatchSize = 16
+const (
+	attentorBatchSize   = 16
+	attentorTemperature = 5
+)
 
 // An attentor implements the attention mechanism as a
 // neuralstruct.RStruct, although the r-operator methods
@@ -79,6 +82,9 @@ func (a *attentorState) NextState(ctrl linalg.Vector) neuralstruct.State {
 		BatchSize: attentorBatchSize,
 	}
 	energies := mapper.ApplySeqs(ctrlAugmented)
+	energies = seqfunc.Map(energies, func(in autofunc.Result) autofunc.Result {
+		return autofunc.Scale(in, attentorTemperature)
+	})
 	exps := seqfunc.Map(energies, autofunc.Exp{}.Apply)
 	mag := autofunc.Inverse(seqfunc.AddAll(exps))
 	probs := seqfunc.Map(exps, func(in autofunc.Result) autofunc.Result {
