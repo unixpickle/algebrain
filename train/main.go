@@ -135,7 +135,6 @@ func generateSamples(genNames string, samplesPer int) (training, validation alge
 		for i := 0; i < samplesPer; i++ {
 			training = append(training, g.Generate())
 			validation = append(validation, g.Generate())
-			fmt.Println(g.Generate())
 		}
 	}
 	return
