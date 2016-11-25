@@ -2,7 +2,9 @@ package algebrain
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
+	"strconv"
 
 	"github.com/unixpickle/algebrain/mathexpr"
 	"github.com/unixpickle/autofunc/seqfunc"
@@ -126,6 +128,89 @@ func (s *ScaleGenerator) scaleNode(varName string, amount mathexpr.Node,
 		n.SetChild(i, s.scaleNode(varName, amount, x))
 	}
 	return n
+}
+
+// An EvalGenerator generates expressions with no
+// variables which evaluate down to a single number.
+type EvalGenerator struct {
+	Generator *mathexpr.Generator
+	MaxDepth  int
+	AllInts   bool
+
+	UseDiv bool
+	UsePow bool
+}
+
+func (e *EvalGenerator) Generate() *Sample {
+	var expr mathexpr.Node
+	for {
+		expr = e.Generator.Generate(e.MaxDepth)
+		if e.valid(expr) {
+			break
+		}
+	}
+	val := e.evaluateExpr(expr)
+	prec := 2
+	if e.AllInts {
+		prec = 0
+	}
+	outStr := strconv.FormatFloat(val, 'f', prec, 64)
+	return &Sample{
+		Query:    "evaluate " + expr.String(),
+		Response: "Result: " + outStr,
+	}
+}
+
+func (e *EvalGenerator) evaluateExpr(n mathexpr.Node) float64 {
+	switch n := n.(type) {
+	case *mathexpr.BinaryOp:
+		left := e.evaluateExpr(n.Left)
+		right := e.evaluateExpr(n.Right)
+		switch n.Op {
+		case mathexpr.AddOp:
+			return left + right
+		case mathexpr.SubtractOp:
+			return left - right
+		case mathexpr.MultiplyOp:
+			return left * right
+		case mathexpr.DivideOp:
+			if e.AllInts {
+				return float64(int(left) / int(right))
+			} else {
+				return left / right
+			}
+		case mathexpr.PowOp:
+			if e.AllInts && right < 0 {
+				return 0
+			}
+			return math.Pow(left, right)
+		}
+	case *mathexpr.NegOp:
+		return -e.evaluateExpr(n.Node)
+	case mathexpr.RawNode:
+		res, _ := strconv.ParseFloat(string(n), 64)
+		return res
+	}
+	panic("unsupported expression: " + n.String())
+}
+
+func (e *EvalGenerator) valid(n mathexpr.Node) bool {
+	for _, child := range n.Children() {
+		if !e.valid(child) {
+			return false
+		}
+	}
+	switch n := n.(type) {
+	case *mathexpr.BinaryOp:
+		right := e.evaluateExpr(n.Right)
+		if (right == 0 || !e.UseDiv) && n.Op == mathexpr.DivideOp {
+			return false
+		}
+		if !e.UsePow && n.Op == mathexpr.PowOp {
+			return false
+		}
+	}
+	return true
 }
 
 func generateNumber(g mathexpr.Generator) mathexpr.RawNode {

@@ -29,6 +29,13 @@ var Generators = map[string]algebrain.Generator{
 		},
 		MaxDepth: 1,
 	},
+	"EasyEval": &algebrain.EvalGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals: true,
+		},
+		MaxDepth: 1,
+		AllInts:  true,
+	},
 	"MediumShift": &algebrain.ShiftGenerator{
 		Generator: &mathexpr.Generator{
 			NoReals:  true,
@@ -43,6 +50,14 @@ var Generators = map[string]algebrain.Generator{
 		},
 		MaxDepth: 3,
 	},
+	"MediumEval": &algebrain.EvalGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals: true,
+			Stddev:  80,
+		},
+		MaxDepth: 3,
+		AllInts:  true,
+	},
 }
 
 func main() {
@@ -52,7 +67,8 @@ func main() {
 	var outFile string
 	var samplesPerGen int
 	var logInterval int
-	flag.StringVar(&genNames, "generators", "EasyShift,MediumShift,EasyScale,MediumScale",
+	flag.StringVar(&genNames, "generators",
+		"EasyShift,MediumShift,EasyScale,MediumScale,EasyEval,MediumEval",
 		"comma-separated generator list")
 	flag.Float64Var(&stepSize, "step", 0.005, "SGD step size")
 	flag.IntVar(&batchSize, "batch", 4, "SGD batch size")
@@ -119,6 +135,7 @@ func generateSamples(genNames string, samplesPer int) (training, validation alge
 		for i := 0; i < samplesPer; i++ {
 			training = append(training, g.Generate())
 			validation = append(validation, g.Generate())
+			fmt.Println(g.Generate())
 		}
 	}
 	return
