@@ -58,6 +58,20 @@ var Generators = map[string]algebrain.Generator{
 		MaxDepth: 3,
 		AllInts:  true,
 	},
+	"HardShift": &algebrain.ShiftGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals:  true,
+			VarNames: []string{"x", "y", "z"},
+		},
+		MaxDepth: 5,
+	},
+	"HardScale": &algebrain.ScaleGenerator{
+		Generator: &mathexpr.Generator{
+			NoReals:  true,
+			VarNames: []string{"x", "y", "z"},
+		},
+		MaxDepth: 5,
+	},
 }
 
 func main() {

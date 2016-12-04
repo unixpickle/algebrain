@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/unixpickle/algebrain/mathexpr"
-	"github.com/unixpickle/autofunc/seqfunc"
 	"github.com/unixpickle/num-analysis/linalg"
 )
 
@@ -19,36 +18,34 @@ type Sample struct {
 }
 
 // InputSequence generates the sample's input sequence.
-func (s *Sample) InputSequence() seqfunc.Result {
+func (s *Sample) InputSequence() []linalg.Vector {
 	res := make([]linalg.Vector, len(s.Query))
 	for i, x := range s.Query {
 		res[i] = oneHotVector(x)
 	}
-	return seqfunc.ConstResult([][]linalg.Vector{res})
+	return res
 }
 
 // DecoderOutSequence is the desired output from the
 // decoder if all goes well.
-func (s *Sample) DecoderOutSequence() seqfunc.Result {
-	res := make([]linalg.Vector, len(s.Response)+2)
-	res[0] = zeroVector()
+func (s *Sample) DecoderOutSequence() []linalg.Vector {
+	res := make([]linalg.Vector, len(s.Response)+1)
 	for i, x := range s.Response {
-		res[i+1] = oneHotVector(x)
+		res[i] = oneHotVector(x)
 	}
 	res[len(res)-1] = oneHotVector(Terminator)
-	return seqfunc.ConstResult([][]linalg.Vector{res})
+	return res
 }
 
 // DecoderInSequence generates the desired input to be fed
 // to the decoder if all goes well.
-func (s *Sample) DecoderInSequence() seqfunc.Result {
-	res := make([]linalg.Vector, len(s.Response)+2)
+func (s *Sample) DecoderInSequence() []linalg.Vector {
+	res := make([]linalg.Vector, len(s.Response)+1)
 	res[0] = zeroVector()
-	res[1] = zeroVector()
 	for i, x := range s.Response {
-		res[i+2] = oneHotVector(x)
+		res[i+1] = oneHotVector(x)
 	}
-	return seqfunc.ConstResult([][]linalg.Vector{res})
+	return res
 }
 
 // A Generator generates random Samples from a template.
