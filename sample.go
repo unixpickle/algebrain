@@ -43,10 +43,8 @@ func (s *Sample) DecoderOutSequence() []linalg.Vector {
 // to the decoder if all goes well.
 func (s *Sample) DecoderInSequence() []linalg.Vector {
 	res := make([]linalg.Vector, len(s.Response)+2)
-	res[0] = zeroVector()
-	res[1] = zeroVector()
-	for i, x := range s.Response {
-		res[i+2] = oneHotVector(x)
+	for i := range res {
+		res[i] = linalg.Vector{}
 	}
 	return res
 }

@@ -58,21 +58,19 @@ func DeserializeNetwork(d []byte) (*Network, error) {
 // NewNetwork creates a randomly-initialized Network.
 func NewNetwork() *Network {
 	encoder := &rnn.Bidirectional{
-		Forward: &rnn.BlockSeqFunc{B: inCharScale(&rnn.StateOutBlock{
-			Block: newNetworkBlock(CharCount+encoderStateSize, encoderStateSize,
-				encoderStateSize, neuralnet.HyperbolicTangent{}),
-		})},
-		Backward: &rnn.BlockSeqFunc{B: inCharScale(&rnn.StateOutBlock{
-			Block: newNetworkBlock(CharCount+encoderStateSize, encoderStateSize,
-				encoderStateSize, neuralnet.HyperbolicTangent{}),
-		})},
+		Forward: &rnn.BlockSeqFunc{B: inCharScale(
+			rnn.NewLSTM(CharCount, encoderStateSize),
+		)},
+		Backward: &rnn.BlockSeqFunc{B: inCharScale(
+			rnn.NewLSTM(CharCount, encoderStateSize),
+		)},
 		Output: &rnn.BlockSeqFunc{
 			B: newOutputBlock(encoderStateSize*2, encoderOutSize,
 				neuralnet.HyperbolicTangent{}),
 		},
 	}
 	decoderBlock := rnn.StackedBlock{
-		rnn.NewLSTM(encoderOutSize+CharCount, 300),
+		rnn.NewLSTM(encoderOutSize, 300),
 		rnn.NewLSTM(300, 300),
 		newOutputBlock(300, focusInfoSize+CharCount, &neuralstruct.PartialActivation{
 			Ranges: []neuralstruct.ComponentRange{
@@ -156,18 +154,17 @@ func (n *Network) Query(q string) string {
 	sample := Sample{Query: q}
 	r := n.softAlign().TimeStepper(sample.InputSequence())
 
-	r.StepTime(zeroVector())
+	r.StepTime(linalg.Vector{})
 
-	var lastOut rune = Terminator
 	var res string
 	for {
-		nextVec := r.StepTime(oneHotVector(lastOut))
+		nextVec := r.StepTime(linalg.Vector{})
 		_, nextIdx := nextVec.Max()
-		lastOut = rune(nextIdx)
-		if lastOut == 0 || len(res) >= maxResponseLen {
+		out := rune(nextIdx)
+		if out == 0 || len(res) >= maxResponseLen {
 			break
 		}
-		res += string(lastOut)
+		res += string(out)
 	}
 	return res
 }
