@@ -19,9 +19,10 @@ type Sample struct {
 
 // InputSequence generates the sample's input sequence.
 func (s *Sample) InputSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Query))
+	res := make([]linalg.Vector, len(s.Query)+1)
+	res[0] = zeroVector()
 	for i, x := range s.Query {
-		res[i] = oneHotVector(x)
+		res[i+1] = oneHotVector(x)
 	}
 	return res
 }
@@ -29,9 +30,10 @@ func (s *Sample) InputSequence() []linalg.Vector {
 // DecoderOutSequence is the desired output from the
 // decoder if all goes well.
 func (s *Sample) DecoderOutSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Response)+1)
+	res := make([]linalg.Vector, len(s.Response)+2)
+	res[0] = zeroVector()
 	for i, x := range s.Response {
-		res[i] = oneHotVector(x)
+		res[i+1] = oneHotVector(x)
 	}
 	res[len(res)-1] = oneHotVector(Terminator)
 	return res
@@ -40,10 +42,11 @@ func (s *Sample) DecoderOutSequence() []linalg.Vector {
 // DecoderInSequence generates the desired input to be fed
 // to the decoder if all goes well.
 func (s *Sample) DecoderInSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Response)+1)
+	res := make([]linalg.Vector, len(s.Response)+2)
 	res[0] = zeroVector()
+	res[1] = zeroVector()
 	for i, x := range s.Response {
-		res[i+1] = oneHotVector(x)
+		res[i+2] = oneHotVector(x)
 	}
 	return res
 }

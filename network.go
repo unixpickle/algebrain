@@ -19,7 +19,8 @@ const (
 	CharCount  = 128
 	Terminator = 0
 
-	encoderOutSize     = 10
+	encoderOutSize     = 15
+	encoderStateSize   = 30
 	focusInfoSize      = 30
 	attentionBatchSize = 32
 
@@ -57,16 +58,16 @@ func DeserializeNetwork(d []byte) (*Network, error) {
 // NewNetwork creates a randomly-initialized Network.
 func NewNetwork() *Network {
 	encoder := &rnn.Bidirectional{
-		Forward: &rnn.BlockSeqFunc{B: &rnn.StateOutBlock{
-			Block: newNetworkBlock(CharCount+encoderOutSize, encoderOutSize, encoderOutSize,
-				neuralnet.HyperbolicTangent{}),
-		}},
-		Backward: &rnn.BlockSeqFunc{B: &rnn.StateOutBlock{
-			Block: newNetworkBlock(CharCount+encoderOutSize, encoderOutSize, encoderOutSize,
-				neuralnet.HyperbolicTangent{}),
-		}},
+		Forward: &rnn.BlockSeqFunc{B: inCharScale(&rnn.StateOutBlock{
+			Block: newNetworkBlock(CharCount+encoderStateSize, encoderStateSize,
+				encoderStateSize, neuralnet.HyperbolicTangent{}),
+		})},
+		Backward: &rnn.BlockSeqFunc{B: inCharScale(&rnn.StateOutBlock{
+			Block: newNetworkBlock(CharCount+encoderStateSize, encoderStateSize,
+				encoderStateSize, neuralnet.HyperbolicTangent{}),
+		})},
 		Output: &rnn.BlockSeqFunc{
-			B: newOutputBlock(encoderOutSize*2, encoderOutSize,
+			B: newOutputBlock(encoderStateSize*2, encoderOutSize,
 				neuralnet.HyperbolicTangent{}),
 		},
 	}
@@ -155,6 +156,8 @@ func (n *Network) Query(q string) string {
 	sample := Sample{Query: q}
 	r := n.softAlign().TimeStepper(sample.InputSequence())
 
+	r.StepTime(zeroVector())
+
 	var lastOut rune = Terminator
 	var res string
 	for {
@@ -231,4 +234,13 @@ func newNetworkBlock(inCount, outCount, state int, activation neuralnet.Layer) r
 	biases := net[0].(*neuralnet.DenseLayer).Biases
 	biases.Var.Vector.Scale(0)
 	return rnn.NewNetworkBlock(net, state)
+}
+
+func inCharScale(b rnn.Block) rnn.Block {
+	return rnn.StackedBlock{
+		rnn.NewNetworkBlock(neuralnet.Network{
+			&neuralnet.RescaleLayer{Scale: 10},
+		}, 0),
+		b,
+	}
 }

@@ -82,9 +82,9 @@ func main() {
 	var samplesPerGen int
 	var logInterval int
 	flag.StringVar(&genNames, "generators",
-		"EasyShift,MediumShift,EasyScale,MediumScale,EasyEval,MediumEval",
+		"EasyShift,MediumShift,EasyScale,MediumScale,EasyEval,MediumEval,HardShift,HardScale",
 		"comma-separated generator list")
-	flag.Float64Var(&stepSize, "step", 0.005, "SGD step size")
+	flag.Float64Var(&stepSize, "step", 0.001, "SGD step size")
 	flag.IntVar(&batchSize, "batch", 4, "SGD batch size")
 	flag.StringVar(&outFile, "file", "out_net", "output/input network file")
 	flag.IntVar(&samplesPerGen, "samples", 10000, "samples per generator")
@@ -107,7 +107,7 @@ func main() {
 
 	log.Println("Training...")
 
-	gradienter := &sgd.Adam{Gradienter: net}
+	gradienter := &sgd.RMSProp{Gradienter: net, Resiliency: 0.9}
 
 	var lastBatch sgd.SampleSet
 	var iter int
