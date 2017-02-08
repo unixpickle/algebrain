@@ -77,6 +77,10 @@ func NewNetwork(c anyvec.Creator) *Network {
 		Out: anynet.Net{
 			anynet.Tanh,
 			anynet.NewFC(c, 0x80, 1),
+			&anynet.Affine{
+				Scalers: anydiff.NewVar(c.MakeVectorData(c.MakeNumericList([]float64{5}))),
+				Biases:  anydiff.NewVar(c.MakeVectorData(c.MakeNumericList([]float64{0}))),
+			},
 		},
 	}
 	return &Network{
