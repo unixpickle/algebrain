@@ -1,30 +1,25 @@
 package algebrain
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
+	"github.com/unixpickle/anydiff"
+	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/anynet"
+	"github.com/unixpickle/anynet/anyrnn"
+	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/attention"
-	"github.com/unixpickle/autofunc"
-	"github.com/unixpickle/autofunc/seqfunc"
-	"github.com/unixpickle/neuralstruct"
-	"github.com/unixpickle/num-analysis/linalg"
+	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/serializer"
-	"github.com/unixpickle/sgd"
-	"github.com/unixpickle/weakai/neuralnet"
-	"github.com/unixpickle/weakai/rnn"
 )
 
 const (
-	CharCount  = 128
+	CharCount  = 0x80
 	Terminator = 0
 
-	encoderOutSize     = 15
-	encoderStateSize   = 30
-	focusInfoSize      = 30
-	attentionBatchSize = 32
+	querySize     = 0x80
+	encodedSize   = 0x40
+	decoderInSize = CharCount + encodedSize
 
-	maxResponseLen = 1000
+	maxResponseLen = 0x400
 )
 
 func init() {
@@ -35,92 +30,71 @@ func init() {
 // A Network uses a machine translation architecture to
 // produce output expressions for input queries.
 type Network struct {
-	Encoder   seqfunc.RFunc
-	Decoder   rnn.Block
-	Attention neuralnet.Network
-	InitQuery *autofunc.Variable
+	Encoder *anyrnn.Bidir
+	Align   *attention.SoftAlign
 }
 
 // DeserializeNetwork deserializes a Network.
 func DeserializeNetwork(d []byte) (*Network, error) {
 	var res Network
-	var initData serializer.Bytes
-	err := serializer.DeserializeAny(d, &res.Encoder, &res.Decoder, &res.Attention, &initData)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(initData, &res.InitQuery); err != nil {
-		return nil, err
+	if err := serializer.DeserializeAny(d, &res.Encoder, &res.Align); err != nil {
+		return nil, essentials.AddCtx("deserialize Network", err)
 	}
 	return &res, nil
 }
 
 // NewNetwork creates a randomly-initialized Network.
-func NewNetwork() *Network {
-	encoder := &rnn.Bidirectional{
-		Forward: &rnn.BlockSeqFunc{B: inCharScale(
-			rnn.NewLSTM(CharCount, encoderStateSize),
-		)},
-		Backward: &rnn.BlockSeqFunc{B: inCharScale(
-			rnn.NewLSTM(CharCount, encoderStateSize),
-		)},
-		Output: &rnn.BlockSeqFunc{
-			B: newOutputBlock(encoderStateSize*2, encoderOutSize,
-				neuralnet.HyperbolicTangent{}),
+func NewNetwork(c anyvec.Creator) *Network {
+	inScaler := c.MakeNumeric(16)
+	encoder := &anyrnn.Bidir{
+		Forward: anyrnn.Stack{
+			anyrnn.NewLSTM(c, CharCount, 0x100).ScaleInWeights(inScaler),
+			anyrnn.NewLSTM(c, 0x100, encodedSize),
+		},
+		Backward: anyrnn.Stack{
+			anyrnn.NewLSTM(c, CharCount, 0x100).ScaleInWeights(inScaler),
+			anyrnn.NewLSTM(c, 0x100, encodedSize),
+		},
+		Mixer: &anynet.AddMixer{
+			In1: anynet.NewFC(c, encodedSize, encodedSize),
+			In2: anynet.NewFC(c, encodedSize, encodedSize),
+			Out: anynet.Tanh,
 		},
 	}
-	decoderBlock := rnn.StackedBlock{
-		rnn.NewLSTM(encoderOutSize, 300),
-		rnn.NewLSTM(300, 300),
-		newOutputBlock(300, focusInfoSize+CharCount, &neuralstruct.PartialActivation{
-			Ranges: []neuralstruct.ComponentRange{
-				{Start: 0, End: focusInfoSize},
-			},
-			Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
-		}),
+	decoderBlock := anyrnn.Stack{
+		anyrnn.NewLSTM(c, decoderInSize, 0x100),
+		anyrnn.NewLSTM(c, 0x100, querySize),
 	}
-	attention := neuralnet.Network{
-		&neuralnet.DenseLayer{
-			InputCount:  focusInfoSize + encoderOutSize,
-			OutputCount: 300,
-		},
-		&neuralnet.HyperbolicTangent{},
-		&neuralnet.DenseLayer{
-			InputCount:  300,
-			OutputCount: 100,
-		},
-		&neuralnet.HyperbolicTangent{},
-		&neuralnet.DenseLayer{
-			InputCount:  100,
-			OutputCount: 1,
-		},
-		&neuralnet.RescaleLayer{Scale: 1},
+	inComb := &anynet.AddMixer{
+		In1: anynet.NewFC(c, encodedSize, decoderInSize),
+		In2: anynet.NewFC(c, CharCount, decoderInSize),
+		Out: anynet.Tanh,
 	}
-	attention.Randomize()
+	inComb.In2.(*anynet.FC).Weights.Vector.Scale(inScaler)
+	attentor := &anynet.AddMixer{
+		In1: anynet.NewFC(c, querySize, 0x20),
+		In2: anynet.NewFC(c, encodedSize, 0x20),
+		Out: anynet.Net{
+			anynet.Tanh,
+			anynet.NewFC(c, 0x20, 1),
+		},
+	}
 	return &Network{
-		Encoder:   encoder,
-		Decoder:   decoderBlock,
-		Attention: attention,
-		InitQuery: &autofunc.Variable{Vector: make(linalg.Vector, focusInfoSize)},
+		Encoder: encoder,
+		Align: &attention.SoftAlign{
+			Attentor:   attentor,
+			Decoder:    decoderBlock,
+			InCombiner: inComb,
+			InitQuery:  anydiff.NewVar(c.MakeVector(querySize)),
+		},
 	}
 }
 
-// LoadNetwork loads a Network from a file.
-func LoadNetwork(path string) (*Network, error) {
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return DeserializeNetwork(contents)
-}
-
-// Parameters gets the parameters of the block.
-func (n *Network) Parameters() []*autofunc.Variable {
-	res := []*autofunc.Variable{n.InitQuery}
-	for _, block := range []interface{}{n.Encoder, n.Decoder, n.Attention} {
-		if l, ok := block.(sgd.Learner); ok {
-			res = append(res, l.Parameters()...)
-		}
+// Parameters gets the parameters of the network.
+func (n *Network) Parameters() []*anydiff.Var {
+	var res []*anydiff.Var
+	for _, p := range []anynet.Parameterizer{n.Encoder, n.Align} {
+		res = append(res, p.Parameters()...)
 	}
 	return res
 }
@@ -133,111 +107,30 @@ func (n *Network) SerializerType() string {
 
 // Serialize attempts to serialize the Network.
 func (n *Network) Serialize() ([]byte, error) {
-	data, err := json.Marshal(n.InitQuery)
-	if err != nil {
-		return nil, err
-	}
-	return serializer.SerializeAny(n.Encoder, n.Decoder, n.Attention, serializer.Bytes(data))
-}
-
-// Save writes the Network to a file.
-func (n *Network) Save(path string) error {
-	enc, err := n.Serialize()
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, enc, 0755)
+	return serializer.SerializeAny(n.Encoder, n.Align)
 }
 
 // Query runs a query against this Network.
 func (n *Network) Query(q string) string {
 	sample := Sample{Query: q}
-	r := n.softAlign().TimeStepper(sample.InputSequence())
+	inSeq := anyseq.ConstSeqList([][]anyvec.Vector{sample.InputSequence()})
+	enc := n.Encoder.Apply(inSeq)
+	b := n.Align.Block(enc)
+	state := b.Start(1)
 
-	r.StepTime(linalg.Vector{})
-
+	var lastChar rune
 	var res string
+
 	for {
-		nextVec := r.StepTime(linalg.Vector{})
-		_, nextIdx := nextVec.Max()
-		out := rune(nextIdx)
-		if out == 0 || len(res) >= maxResponseLen {
+		result := b.Step(state, oneHotVector(lastChar))
+		state = result.State()
+		nextIdx := anyvec.MaxIndex(result.Output())
+		lastChar = rune(nextIdx)
+		if lastChar == 0 || len(res) >= maxResponseLen {
 			break
 		}
-		res += string(out)
+		res += string(lastChar)
 	}
+
 	return res
-}
-
-// Gradient computes the cost gradient for a batch.
-func (n *Network) Gradient(s sgd.SampleSet) autofunc.Gradient {
-	grad := autofunc.NewGradient(n.Parameters())
-	cost := n.computeCost(s)
-	cost.PropagateGradient([]float64{1}, grad)
-	return grad
-}
-
-// TotalCost computes the total cost for a batch.
-func (n *Network) TotalCost(s sgd.SampleSet) float64 {
-	return n.computeCost(s).Output()[0]
-}
-
-func (n *Network) computeCost(s sgd.SampleSet) autofunc.Result {
-	var inSeqs [][]linalg.Vector
-	var outSeqs [][]linalg.Vector
-	var decInSeqs [][]linalg.Vector
-	for i := 0; i < s.Len(); i++ {
-		s := s.GetSample(i).(*Sample)
-		inSeqs = append(inSeqs, s.InputSequence())
-		outSeqs = append(outSeqs, s.DecoderOutSequence())
-		decInSeqs = append(decInSeqs, s.DecoderInSequence())
-	}
-	output := n.softAlign().Apply(seqfunc.ConstResult(inSeqs),
-		seqfunc.ConstResult(decInSeqs))
-	return seqfunc.AddAll(seqfunc.MapN(func(ins ...autofunc.Result) autofunc.Result {
-		actual := ins[0]
-		expected := ins[1].Output()
-		cf := &neuralnet.DotCost{}
-		logSoft := neuralnet.LogSoftmaxLayer{}
-		return cf.Cost(expected, logSoft.Apply(actual))
-	}, output, seqfunc.ConstResult(outSeqs)))
-}
-
-func (n *Network) softAlign() *attention.SoftAlign {
-	return &attention.SoftAlign{
-		Encoder:    n.Encoder,
-		Attentor:   n.Attention,
-		Decoder:    n.Decoder,
-		BatchSize:  attentionBatchSize,
-		StartQuery: n.InitQuery,
-	}
-}
-
-func newOutputBlock(inCount, outCount int, activation neuralnet.Layer) rnn.Block {
-	return newNetworkBlock(inCount, outCount, 0, activation)
-}
-
-func newNetworkBlock(inCount, outCount, state int, activation neuralnet.Layer) rnn.Block {
-	net := neuralnet.Network{
-		&neuralnet.DenseLayer{
-			InputCount:  inCount,
-			OutputCount: outCount,
-		},
-	}
-	if activation != nil {
-		net = append(net, activation)
-	}
-	net.Randomize()
-	biases := net[0].(*neuralnet.DenseLayer).Biases
-	biases.Var.Vector.Scale(0)
-	return rnn.NewNetworkBlock(net, state)
-}
-
-func inCharScale(b rnn.Block) rnn.Block {
-	return rnn.StackedBlock{
-		rnn.NewNetworkBlock(neuralnet.Network{
-			&neuralnet.RescaleLayer{Scale: 10},
-		}, 0),
-		b,
-	}
 }

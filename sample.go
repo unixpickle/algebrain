@@ -7,6 +7,8 @@ import (
 	"strconv"
 
 	"github.com/unixpickle/algebrain/mathexpr"
+	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/anyvec/anyvec32"
 	"github.com/unixpickle/num-analysis/linalg"
 )
 
@@ -18,22 +20,20 @@ type Sample struct {
 }
 
 // InputSequence generates the sample's input sequence.
-func (s *Sample) InputSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Query)+1)
-	res[0] = zeroVector()
+func (s *Sample) InputSequence() []anyvec.Vector {
+	res := make([]anyvec.Vector, len(s.Query))
 	for i, x := range s.Query {
-		res[i+1] = oneHotVector(x)
+		res[i] = oneHotVector(x)
 	}
 	return res
 }
 
 // DecoderOutSequence is the desired output from the
 // decoder if all goes well.
-func (s *Sample) DecoderOutSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Response)+2)
-	res[0] = zeroVector()
+func (s *Sample) DecoderOutSequence() []anyvec.Vector {
+	res := make([]anyvec.Vector, len(s.Response)+1)
 	for i, x := range s.Response {
-		res[i+1] = oneHotVector(x)
+		res[i] = oneHotVector(x)
 	}
 	res[len(res)-1] = oneHotVector(Terminator)
 	return res
@@ -41,10 +41,11 @@ func (s *Sample) DecoderOutSequence() []linalg.Vector {
 
 // DecoderInSequence generates the desired input to be fed
 // to the decoder if all goes well.
-func (s *Sample) DecoderInSequence() []linalg.Vector {
-	res := make([]linalg.Vector, len(s.Response)+2)
-	for i := range res {
-		res[i] = linalg.Vector{}
+func (s *Sample) DecoderInSequence() []anyvec.Vector {
+	res := make([]anyvec.Vector, len(s.Response)+1)
+	res[0] = oneHotVector(0)
+	for i, x := range s.Response {
+		res[i+1] = oneHotVector(x)
 	}
 	return res
 }
@@ -221,12 +222,12 @@ func zeroVector() linalg.Vector {
 	return make(linalg.Vector, CharCount)
 }
 
-func oneHotVector(x rune) linalg.Vector {
-	res := make(linalg.Vector, CharCount)
+func oneHotVector(x rune) anyvec.Vector {
 	ix := int(x)
-	if ix > 128 || ix < 0 {
+	if ix >= CharCount || ix < 0 {
 		panic("rune out of range: " + string(x))
 	}
-	res[ix] = 1
-	return res
+	data := make([]float32, CharCount)
+	data[ix] = 1
+	return anyvec32.MakeVectorData(data)
 }
