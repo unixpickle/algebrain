@@ -72,11 +72,11 @@ func NewNetwork(c anyvec.Creator) *Network {
 	}
 	inComb.In2.(*anynet.FC).Weights.Vector.Scale(inScaler)
 	attentor := &anynet.AddMixer{
-		In1: anynet.NewFC(c, querySize, 0x20),
-		In2: anynet.NewFC(c, encodedSize, 0x20),
+		In1: anynet.NewFC(c, querySize, 0x80),
+		In2: anynet.NewFC(c, encodedSize, 0x80),
 		Out: anynet.Net{
 			anynet.Tanh,
-			anynet.NewFC(c, 0x20, 1),
+			anynet.NewFC(c, 0x80, 1),
 		},
 	}
 	return &Network{
