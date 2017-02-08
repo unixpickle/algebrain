@@ -81,7 +81,7 @@ func (t *Trainer) tempTrainer(b anysgd.Batch) (*anys2s.Trainer, *anys2s.Batch) {
 				return anyseq.Pool(enc, func(enc anyseq.Seq) anyseq.Seq {
 					block := t.Network.Align.Block(enc)
 					return anyseq.Map(anyrnn.Map(b.(*Batch).DecIn, block),
-						anynet.LogSoftmax.Apply)
+						t.Network.Output.Apply)
 				})
 			},
 			Cost:    anynet.DotCost{},

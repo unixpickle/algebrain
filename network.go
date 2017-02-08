@@ -32,12 +32,14 @@ func init() {
 type Network struct {
 	Encoder *anyrnn.Bidir
 	Align   *attention.SoftAlign
+	Output  anynet.Net
 }
 
 // DeserializeNetwork deserializes a Network.
 func DeserializeNetwork(d []byte) (*Network, error) {
 	var res Network
-	if err := serializer.DeserializeAny(d, &res.Encoder, &res.Align); err != nil {
+	err := serializer.DeserializeAny(d, &res.Encoder, &res.Align, &res.Output)
+	if err != nil {
 		return nil, essentials.AddCtx("deserialize Network", err)
 	}
 	return &res, nil
@@ -91,13 +93,17 @@ func NewNetwork(c anyvec.Creator) *Network {
 			InCombiner: inComb,
 			InitQuery:  anydiff.NewVar(c.MakeVector(querySize)),
 		},
+		Output: anynet.Net{
+			anynet.NewFC(c, querySize, CharCount),
+			anynet.LogSoftmax,
+		},
 	}
 }
 
 // Parameters gets the parameters of the network.
 func (n *Network) Parameters() []*anydiff.Var {
 	var res []*anydiff.Var
-	for _, p := range []anynet.Parameterizer{n.Encoder, n.Align} {
+	for _, p := range []anynet.Parameterizer{n.Encoder, n.Align, n.Output} {
 		res = append(res, p.Parameters()...)
 	}
 	return res
@@ -111,7 +117,7 @@ func (n *Network) SerializerType() string {
 
 // Serialize attempts to serialize the Network.
 func (n *Network) Serialize() ([]byte, error) {
-	return serializer.SerializeAny(n.Encoder, n.Align)
+	return serializer.SerializeAny(n.Encoder, n.Align, n.Output)
 }
 
 // Query runs a query against this Network.
@@ -121,7 +127,7 @@ func (n *Network) Query(q string) string {
 	enc := n.Encoder.Apply(inSeq)
 	b := anyrnn.Stack{
 		n.Align.Block(enc),
-		&anyrnn.LayerBlock{Layer: anynet.LogSoftmax},
+		&anyrnn.LayerBlock{Layer: n.Output},
 	}
 	state := b.Start(1)
 
