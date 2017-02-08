@@ -115,7 +115,10 @@ func (n *Network) Query(q string) string {
 	sample := Sample{Query: q}
 	inSeq := anyseq.ConstSeqList([][]anyvec.Vector{sample.InputSequence()})
 	enc := n.Encoder.Apply(inSeq)
-	b := n.Align.Block(enc)
+	b := anyrnn.Stack{
+		n.Align.Block(enc),
+		&anyrnn.LayerBlock{Layer: anynet.LogSoftmax},
+	}
 	state := b.Start(1)
 
 	var lastChar rune

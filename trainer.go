@@ -44,7 +44,7 @@ type Trainer struct {
 }
 
 // Fetch creates a *Batch from a SampleList.
-func (t *Trainer) Fetch(s anysgd.SampleList) anysgd.Batch {
+func (t *Trainer) Fetch(s anysgd.SampleList) (anysgd.Batch, error) {
 	var encIn, decIn, decOut [][]anyvec.Vector
 	for i := 0; i < s.Len(); i++ {
 		sample := s.(SampleList)[i]
@@ -56,7 +56,7 @@ func (t *Trainer) Fetch(s anysgd.SampleList) anysgd.Batch {
 		EncIn:  anyseq.ConstSeqList(encIn),
 		DecIn:  anyseq.ConstSeqList(decIn),
 		DecOut: anyseq.ConstSeqList(decOut),
-	}
+	}, nil
 }
 
 // TotalCost computes the cost for the *Batch.
@@ -77,11 +77,11 @@ func (t *Trainer) Gradient(b anysgd.Batch) anydiff.Grad {
 func (t *Trainer) tempTrainer(b anysgd.Batch) (*anys2s.Trainer, *anys2s.Batch) {
 	return &anys2s.Trainer{
 			Func: func(s anyseq.Seq) anyseq.Seq {
-				decOut := b.(*Batch).DecIn
-				enc := t.Network.Encoder.Apply(decOut)
+				enc := t.Network.Encoder.Apply(s)
 				return anyseq.Pool(enc, func(enc anyseq.Seq) anyseq.Seq {
 					block := t.Network.Align.Block(enc)
-					return anyrnn.Map(enc, block)
+					return anyseq.Map(anyrnn.Map(b.(*Batch).DecIn, block),
+						anynet.LogSoftmax.Apply)
 				})
 			},
 			Cost:    anynet.DotCost{},

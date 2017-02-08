@@ -2,16 +2,18 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/unixpickle/algebrain"
 	"github.com/unixpickle/algebrain/mathexpr"
-	"github.com/unixpickle/sgd"
+	"github.com/unixpickle/anynet/anysgd"
+	"github.com/unixpickle/anyvec/anyvec32"
+	"github.com/unixpickle/essentials"
+	"github.com/unixpickle/rip"
+	"github.com/unixpickle/serializer"
 )
 
 var Generators = map[string]algebrain.Generator{
@@ -80,59 +82,51 @@ func main() {
 	var batchSize int
 	var outFile string
 	var samplesPerGen int
-	var logInterval int
 	flag.StringVar(&genNames, "generators",
 		"EasyShift,MediumShift,EasyScale,MediumScale,EasyEval,MediumEval,HardShift,HardScale",
 		"comma-separated generator list")
 	flag.Float64Var(&stepSize, "step", 0.001, "SGD step size")
-	flag.IntVar(&batchSize, "batch", 4, "SGD batch size")
+	flag.IntVar(&batchSize, "batch", 8, "SGD batch size")
 	flag.StringVar(&outFile, "file", "out_net", "output/input network file")
 	flag.IntVar(&samplesPerGen, "samples", 10000, "samples per generator")
-	flag.IntVar(&logInterval, "logint", 4, "log interval")
 	flag.Parse()
 
 	log.Println("Creating samples...")
-	training, validation := generateSamples(genNames, samplesPerGen)
+	training := generateSamples(genNames, samplesPerGen)
 
 	rand.Seed(time.Now().UnixNano())
 
-	log.Println("Obtaining RNN block...")
-	net, err := algebrain.LoadNetwork(outFile)
-	if os.IsNotExist(err) {
+	var net *algebrain.Network
+	if err := serializer.LoadAny(outFile, &net); err != nil {
 		log.Println("Creating new RNN block...")
-		net = algebrain.NewNetwork()
-	} else if err != nil {
-		die("Failed to load block:", err)
+		net = algebrain.NewNetwork(anyvec32.CurrentCreator())
+	} else {
+		log.Println("Loaded existing RNN block.")
 	}
 
 	log.Println("Training...")
-
-	gradienter := &sgd.RMSProp{Gradienter: net, Resiliency: 0.9}
-
-	var lastBatch sgd.SampleSet
+	trainer := &algebrain.Trainer{Network: net}
 	var iter int
-	sgd.SGDMini(gradienter, training, stepSize, batchSize, func(b sgd.SampleSet) bool {
-		if iter%logInterval == 0 {
-			var lastCost float64
-			if lastBatch != nil {
-				lastCost = net.TotalCost(lastBatch)
-			}
-			lastBatch = b
-			cost := net.TotalCost(b)
-			sgd.ShuffleSampleSet(validation)
-			val := net.TotalCost(validation.Subset(0, batchSize))
-			log.Printf("iter %d: validation=%f cost=%f last=%f", iter, val, cost, lastCost)
-		}
-		iter++
-		return true
-	})
+	sgd := &anysgd.SGD{
+		Fetcher:     trainer,
+		Gradienter:  trainer,
+		Transformer: &anysgd.Adam{},
+		Samples:     training,
+		Rater:       anysgd.ConstRater(stepSize),
+		BatchSize:   batchSize,
+		StatusFunc: func(b anysgd.Batch) {
+			log.Printf("iter %d: cost=%v", iter, trainer.LastCost)
+			iter++
+		},
+	}
+	sgd.Run(rip.NewRIP().Chan())
 
-	if err := net.Save(outFile); err != nil {
-		die("Failed to save block:", err)
+	if err := serializer.SaveAny(outFile, net); err != nil {
+		essentials.Die("Failed to save block:", err)
 	}
 }
 
-func generateSamples(genNames string, samplesPer int) (training, validation algebrain.SampleSet) {
+func generateSamples(genNames string, samplesPer int) algebrain.SampleList {
 	// Ensure that we get the same samples every time.
 	rand.Seed(123)
 
@@ -142,19 +136,14 @@ func generateSamples(genNames string, samplesPer int) (training, validation alge
 		if gen, ok := Generators[x]; ok {
 			gens[i] = gen
 		} else {
-			die("Unknown generator:", x)
+			essentials.Die("Unknown generator:", x)
 		}
 	}
+	var training algebrain.SampleList
 	for _, g := range gens {
 		for i := 0; i < samplesPer; i++ {
 			training = append(training, g.Generate())
-			validation = append(validation, g.Generate())
 		}
 	}
-	return
-}
-
-func die(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	os.Exit(1)
+	return training
 }
