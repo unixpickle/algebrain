@@ -6,15 +6,17 @@ import (
 	"os"
 
 	"github.com/unixpickle/algebrain"
+	"github.com/unixpickle/essentials"
+	"github.com/unixpickle/serializer"
 )
 
 func main() {
 	if len(os.Args) != 2 {
-		die("Usage:", os.Args[0], "<net_file>")
+		essentials.Die("Usage:", os.Args[0], "<net_file>")
 	}
-	net, err := algebrain.LoadNetwork(os.Args[1])
-	if err != nil {
-		die("Load block:", err)
+	var net *algebrain.Network
+	if err := serializer.LoadAny(os.Args[1], &net); err != nil {
+		essentials.Die("Failed to load block:", err)
 	}
 	for {
 		fmt.Println(net.Query(readLine()))
@@ -37,9 +39,4 @@ func readLine() string {
 		}
 	}
 	return res.String()
-}
-
-func die(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	os.Exit(1)
 }
