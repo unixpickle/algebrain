@@ -53,9 +53,9 @@ func (t *Trainer) Fetch(s anysgd.SampleList) (anysgd.Batch, error) {
 		decOut = append(decOut, sample.DecoderOutSequence())
 	}
 	return &Batch{
-		EncIn:  anyseq.ConstSeqList(encIn),
-		DecIn:  anyseq.ConstSeqList(decIn),
-		DecOut: anyseq.ConstSeqList(decOut),
+		EncIn:  anyseq.ConstSeqList(t.Network.creator(), encIn),
+		DecIn:  anyseq.ConstSeqList(t.Network.creator(), decIn),
+		DecOut: anyseq.ConstSeqList(t.Network.creator(), decOut),
 	}, nil
 }
 

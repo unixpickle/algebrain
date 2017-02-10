@@ -123,7 +123,7 @@ func (n *Network) Serialize() ([]byte, error) {
 // Query runs a query against this Network.
 func (n *Network) Query(q string) string {
 	sample := Sample{Query: q}
-	inSeq := anyseq.ConstSeqList([][]anyvec.Vector{sample.InputSequence()})
+	inSeq := anyseq.ConstSeqList(n.creator(), [][]anyvec.Vector{sample.InputSequence()})
 	enc := n.Encoder.Apply(inSeq)
 	b := anyrnn.Stack{
 		n.Align.Block(enc),
@@ -146,4 +146,8 @@ func (n *Network) Query(q string) string {
 	}
 
 	return res
+}
+
+func (n *Network) creator() anyvec.Creator {
+	return n.Parameters()[0].Vector.Creator()
 }
